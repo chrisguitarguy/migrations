@@ -33,6 +33,21 @@ class DiffCommandTest extends CommandTestCase
         self::assertContains('CREATE TABLE example', $content);
     }
 
+    public function testCommandCreatesNewMigrationWithDownMethodContainingDropSql()
+    {
+        $this->config->expects($this->once())
+            ->method('generateVersionNumber')
+            ->willReturn(self::VERSION);
+
+        [$tester, $statusCode] = $this->executeCommand([]);
+
+        self::assertSame(0, $statusCode);
+        self::assertTrue($this->root->hasChild($this->migrationFile));
+        $content = $this->root->getChild($this->migrationFile)->getContent();
+        self::assertContains('class Version' . self::VERSION, $content);
+        self::assertContains('DROP TABLE example', $content);
+    }
+
     public static function provideCustomTemplateNames() : array
     {
         return [

@@ -2,8 +2,11 @@
 
 namespace Doctrine\DBAL\Migrations\Tools\Console\Command;
 
-use Doctrine\DBAL\Migrations\Configuration\Configuration;
 use Doctrine\DBAL\Version as DbalVersion;
+use Doctrine\DBAL\Schema\Comparator;
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Schema\SchemaDiff;
+use Doctrine\DBAL\Migrations\Configuration\Configuration;
 use Doctrine\DBAL\Migrations\Provider\SchemaProviderInterface;
 use Doctrine\DBAL\Migrations\Provider\OrmSchemaProvider;
 use Symfony\Component\Console\Input\InputInterface;
@@ -87,15 +90,18 @@ EOT
             }
         }
 
-        $up   = $this->buildCodeFromSql(
+        $upDiff = self::diffSchema($fromSchema, $toSchema);
+        $up     = $this->buildCodeFromSql(
             $configuration,
-            $fromSchema->getMigrateToSql($toSchema, $platform),
+            $upDiff->toSql($platform),
             $input->getOption('formatted'),
             $input->getOption('line-length')
         );
-        $down = $this->buildCodeFromSql(
+
+        $downDiff = self::diffSchema($toSchema, $fromSchema);
+        $down     = $this->buildCodeFromSql(
             $configuration,
-            $fromSchema->getMigrateFromSql($toSchema, $platform),
+            $downDiff->toSql($platform),
             $input->getOption('formatted'),
             $input->getOption('line-length')
         );
@@ -178,5 +184,17 @@ EOT
         $pos = strpos($name, '.');
 
         return false === $pos ? $name : substr($name, $pos + 1);
+    }
+
+    /**
+     * Diff the from and to schema to figure out what SQL needs to be added
+     * to the migration.
+     *
+     * @param $fromSchema The schema from which the too schema will be diffed
+     * @param $toSchema The target schema with the new DB state to which the DB should be migrated
+     */
+    private static function diffSchema(Schema $fromSchema, Schema $toSchema) : SchemaDiff
+    {
+        return (new Comparator())->compare($fromSchema, $toSchema);
     }
 }
