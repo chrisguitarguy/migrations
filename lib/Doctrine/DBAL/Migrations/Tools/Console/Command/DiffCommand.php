@@ -55,6 +55,7 @@ EOT
             ->addOption('filter-expression', null, InputOption::VALUE_OPTIONAL, 'Tables which are filtered by Regular Expression.')
             ->addOption('formatted', null, InputOption::VALUE_NONE, 'Format the generated SQL.')
             ->addOption('line-length', null, InputOption::VALUE_OPTIONAL, 'Max line length of unformatted lines.', 120)
+            ->addOption('no-drops', null, InputOption::VALUE_NONE, 'Exclude any DROP TABLE statements from the schema diff.')
         ;
     }
 
@@ -66,7 +67,6 @@ EOT
         $this->loadCustomTemplate($configuration, $output);
 
         $conn     = $configuration->getConnection();
-        $platform = $conn->getDatabasePlatform();
 
         if ($filterExpr = $input->getOption('filter-expression')) {
             if ($isDbalOld) {
@@ -93,7 +93,7 @@ EOT
         $upDiff = self::diffSchema($fromSchema, $toSchema);
         $up     = $this->buildCodeFromSql(
             $configuration,
-            $upDiff->toSql($platform),
+            self::diffToSql($configuration, $upDiff, $input->getOption('no-drops')),
             $input->getOption('formatted'),
             $input->getOption('line-length')
         );
@@ -101,7 +101,7 @@ EOT
         $downDiff = self::diffSchema($toSchema, $fromSchema);
         $down     = $this->buildCodeFromSql(
             $configuration,
-            $downDiff->toSql($platform),
+            self::diffToSql($configuration, $downDiff),
             $input->getOption('formatted'),
             $input->getOption('line-length')
         );
@@ -196,5 +196,20 @@ EOT
     private static function diffSchema(Schema $fromSchema, Schema $toSchema) : SchemaDiff
     {
         return (new Comparator())->compare($fromSchema, $toSchema);
+    }
+
+    /**
+     * Convert the diff into a set of SQL statements to run.
+     *
+     * @param $config The migratiosn configuration object
+     * @param $diff The schema diff from which the SQL statements will be generated
+     * @param $noDrops Whether or not `DROP TABLE` statements should be excluded
+     * @return string[] A set of SQL statements to run
+     */
+    private static function diffToSql(Configuration $config, SchemaDiff $diff, bool $noDrops=false) : array
+    {
+        $platform = $config->getConnection()->getDatabasePlatform();
+
+        return $noDrops ? $diff->toSaveSql($platform) : $diff->toSql($platform);
     }
 }
